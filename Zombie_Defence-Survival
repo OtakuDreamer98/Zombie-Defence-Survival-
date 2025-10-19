@@ -1,0 +1,894 @@
+-- Enhanced Portrait UI with Aim Assist, Weapons Giver, Teleport Options, and Owner Notification
+-- Executor-ready LocalScript
+
+-- Cleanup old UI
+if game.CoreGui:FindFirstChild("AdvancedUI") then
+    game.CoreGui.AdvancedUI:Destroy()
+end
+
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Camera = workspace.CurrentCamera
+
+local Player = Players.LocalPlayer
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AdvancedUI"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = game.CoreGui
+
+-- Owner Notification
+local function showOwnerNotification()
+    if Players:FindFirstChild("Rip_kaizer87") then
+        local notification = Instance.new("Frame")
+        notification.Size = UDim2.new(0, 300, 0, 100)
+        notification.Position = UDim2.new(0.5, 0, 0.5, 0)
+        notification.AnchorPoint = Vector2.new(0.5, 0.5)
+        notification.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+        notification.ZIndex = 100
+        notification.Parent = screenGui
+        Instance.new("UICorner", notification).CornerRadius = UDim.new(0, 12)
+
+        local gradient = Instance.new("UIGradient")
+        gradient.Color = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 40, 40)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 20, 20))
+        }
+        gradient.Rotation = 45
+        gradient.Parent = notification
+
+        local shadow = Instance.new("UIStroke")
+        shadow.Thickness = 2
+        shadow.Color = Color3.fromRGB(0, 0, 0)
+        shadow.Transparency = 0.5
+        shadow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        shadow.Parent = notification
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -16, 1, -16)
+        label.Position = UDim2.new(0, 8, 0, 8)
+        label.BackgroundTransparency = 1
+        label.Text = "The owner (Rip_kaizer87) is in the same server!"
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.Font = Enum.Font.GothamBlack
+        label.TextSize = 16
+        label.TextWrapped = true
+        label.TextXAlignment = Enum.TextXAlignment.Center
+        label.TextYAlignment = Enum.TextYAlignment.Center
+        label.Parent = notification
+
+        -- Animation
+        notification.BackgroundTransparency = 1
+        label.TextTransparency = 1
+        local fadeIn = TweenService:Create(notification, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency = 0})
+        local textFadeIn = TweenService:Create(label, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency = 0})
+        local fadeOut = TweenService:Create(notification, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
+        local textFadeOut = TweenService:Create(label, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 1})
+
+        fadeIn:Play()
+        textFadeIn:Play()
+        task.delay(5, function() -- Increased duration to 5 seconds
+            fadeOut:Play()
+            textFadeOut:Play()
+            fadeOut.Completed:Connect(function()
+                notification:Destroy()
+            end)
+        end)
+    end
+end
+
+-- Check for owner on player added and initially
+Players.PlayerAdded:Connect(function(player)
+    if player.Name == "Rip_kaizer87" then
+        showOwnerNotification()
+    end
+    updateTeleportPlayerButtons() -- Ensure teleport player list updates
+end)
+
+for _, player in ipairs(Players:GetPlayers()) do
+    if player.Name == "Rip_kaizer87" then
+        showOwnerNotification()
+        break
+    end
+end
+
+-- UI size (portrait)
+local UI_WIDTH, UI_HEIGHT = 320, 450
+
+-- Toggle Button (top-left)
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Name = "ToggleButton"
+toggleBtn.Size = UDim2.new(0, 48, 0, 48)
+toggleBtn.Position = UDim2.new(0, 10, 0, 10)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+toggleBtn.BorderSizePixel = 0
+toggleBtn.Text = "≡"
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 24
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.ZIndex = 50
+toggleBtn.Parent = screenGui
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 12)
+
+-- Main Frame (centered)
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, UI_WIDTH, 0, UI_HEIGHT)
+mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+mainFrame.BorderSizePixel = 0
+mainFrame.Visible = false
+mainFrame.ZIndex = 20
+mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 16)
+
+local mainGradient = Instance.new("UIGradient")
+mainGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 40, 40)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 20, 20))
+}
+mainGradient.Rotation = 45
+mainGradient.Parent = mainFrame
+
+local mainShadow = Instance.new("UIStroke")
+mainShadow.Thickness = 2
+mainShadow.Color = Color3.fromRGB(0, 0, 0)
+mainShadow.Transparency = 0.5
+mainShadow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+mainShadow.Parent = mainFrame
+
+-- TitleBar (drag handle)
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 50)
+titleBar.BackgroundTransparency = 1
+titleBar.Parent = mainFrame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -60, 1, 0)
+titleLabel.Position = UDim2.new(0, 12, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "⚙ Admin Panel"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Font = Enum.Font.GothamBlack
+titleLabel.TextSize = 20
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = titleBar
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 40, 0, 40)
+closeBtn.Position = UDim2.new(1, -48, 0, 5)
+closeBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+closeBtn.BorderSizePixel = 0
+closeBtn.Text = "✕"
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 20
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.ZIndex = 25
+closeBtn.Parent = titleBar
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 10)
+
+-- Scrollable content area
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -24, 1, -74)
+scrollFrame.Position = UDim2.new(0, 12, 0, 62)
+scrollFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+scrollFrame.BackgroundTransparency = 0.1
+scrollFrame.ScrollBarThickness = 6
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.Parent = mainFrame
+Instance.new("UICorner", scrollFrame).CornerRadius = UDim.new(0, 12)
+
+local scrollGradient = Instance.new("UIGradient")
+scrollGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 35, 35)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 25, 25))
+}
+scrollGradient.Rotation = 45
+scrollGradient.Parent = scrollFrame
+
+-- UI List Layout
+local uiListLayout = Instance.new("UIListLayout")
+uiListLayout.Padding = UDim.new(0, 8)
+uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+uiListLayout.Parent = scrollFrame
+
+-- Function to update scroll canvas size
+local function updateCanvasSize()
+    local totalHeight = 0
+    for _, child in ipairs(scrollFrame:GetChildren()) do
+        if child:IsA("GuiButton") or child:IsA("TextLabel") then
+            totalHeight = totalHeight + child.AbsoluteSize.Y + uiListLayout.Padding.Offset
+        end
+    end
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight + 8)
+end
+
+-- Button animation
+local function animateButton(btn)
+    local originalSize = btn.Size
+    local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tweenGrow = TweenService:Create(btn, tweenInfo, {Size = UDim2.new(originalSize.X.Scale, originalSize.X.Offset * 1.05, originalSize.Y.Scale, originalSize.Y.Offset * 1.05)})
+    local tweenShrink = TweenService:Create(btn, tweenInfo, {Size = originalSize})
+    btn.MouseButton1Down:Connect(function()
+        tweenGrow:Play()
+    end)
+    btn.MouseButton1Up:Connect(function()
+        tweenShrink:Play()
+    end)
+end
+
+-- Hover effect
+local function addHoverEffect(btn)
+    local originalColor = btn.BackgroundColor3
+    btn.MouseEnter:Connect(function()
+        btn.BackgroundColor3 = Color3.fromRGB(
+            math.min(originalColor.R * 255 + 20, 255),
+            math.min(originalColor.G * 255 + 20, 255),
+            math.min(originalColor.B * 255 + 20, 255)
+        )
+    end)
+    btn.MouseLeave:Connect(function()
+        btn.BackgroundColor3 = originalColor
+    end)
+end
+
+-- Category Labels
+local function createCategoryLabel(text, order)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -10, 0, 28)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.Font = Enum.Font.GothamSemibold
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.LayoutOrder = order
+    label.Parent = scrollFrame
+    return label
+end
+
+-- Tools Category
+createCategoryLabel("Tools", 1)
+
+-- Aim Assist Toggle
+local aimAssistBtn = Instance.new("TextButton")
+aimAssistBtn.Size = UDim2.new(1, -10, 0, 40)
+aimAssistBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+aimAssistBtn.Text = "AIMASSIST: OFF"
+aimAssistBtn.Font = Enum.Font.Gotham
+aimAssistBtn.TextSize = 15
+aimAssistBtn.TextColor3 = Color3.fromRGB(255, 50, 50)
+aimAssistBtn.LayoutOrder = 2
+aimAssistBtn.Parent = scrollFrame
+Instance.new("UICorner", aimAssistBtn).CornerRadius = UDim.new(0, 8)
+local aimStroke = Instance.new("UIStroke")
+aimStroke.Thickness = 1
+aimStroke.Color = Color3.fromRGB(80, 80, 80)
+aimStroke.Parent = aimAssistBtn
+animateButton(aimAssistBtn)
+addHoverEffect(aimAssistBtn)
+
+-- Teleports Category
+createCategoryLabel("Teleports", 3)
+
+-- Teleport Place Button
+local teleportPlaceBtn = Instance.new("TextButton")
+teleportPlaceBtn.Size = UDim2.new(1, -10, 0, 40)
+teleportPlaceBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+teleportPlaceBtn.Text = "Teleport Place ▸"
+teleportPlaceBtn.Font = Enum.Font.Gotham
+teleportPlaceBtn.TextSize = 15
+teleportPlaceBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
+teleportPlaceBtn.LayoutOrder = 4
+teleportPlaceBtn.Parent = scrollFrame
+Instance.new("UICorner", teleportPlaceBtn).CornerRadius = UDim.new(0, 8)
+local tpPlaceStroke = Instance.new("UIStroke")
+tpPlaceStroke.Thickness = 1
+tpPlaceStroke.Color = Color3.fromRGB(80, 80, 80)
+tpPlaceStroke.Parent = teleportPlaceBtn
+animateButton(teleportPlaceBtn)
+addHoverEffect(teleportPlaceBtn)
+
+-- Teleport Player Button
+local teleportPlayerBtn = Instance.new("TextButton")
+teleportPlayerBtn.Size = UDim2.new(1, -10, 0, 40)
+teleportPlayerBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+teleportPlayerBtn.Text = "Teleport Player ▸"
+teleportPlayerBtn.Font = Enum.Font.Gotham
+teleportPlayerBtn.TextSize = 15
+teleportPlayerBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
+teleportPlayerBtn.LayoutOrder = 5
+teleportPlayerBtn.Parent = scrollFrame
+Instance.new("UICorner", teleportPlayerBtn).CornerRadius = UDim.new(0, 8)
+local tpPlayerStroke = Instance.new("UIStroke")
+tpPlayerStroke.Thickness = 1
+tpPlayerStroke.Color = Color3.fromRGB(80, 80, 80)
+tpPlayerStroke.Parent = teleportPlayerBtn
+animateButton(teleportPlayerBtn)
+addHoverEffect(teleportPlayerBtn)
+
+-- Weapons Category
+createCategoryLabel("Weapons", 6)
+
+-- Weapons Giver Button
+local selectionBtn = Instance.new("TextButton")
+selectionBtn.Size = UDim2.new(1, -10, 0, 40)
+selectionBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+selectionBtn.Text = "Weapons Giver ▸"
+selectionBtn.Font = Enum.Font.Gotham
+selectionBtn.TextSize = 15
+selectionBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
+selectionBtn.LayoutOrder = 7
+selectionBtn.Parent = scrollFrame
+Instance.new("UICorner", selectionBtn).CornerRadius = UDim.new(0, 8)
+local weaponStroke = Instance.new("UIStroke")
+weaponStroke.Thickness = 1
+weaponStroke.Color = Color3.fromRGB(80, 80, 80)
+weaponStroke.Parent = selectionBtn
+animateButton(selectionBtn)
+addHoverEffect(selectionBtn)
+
+-- Update canvas size
+updateCanvasSize()
+
+-- Function to create popups
+local function createPopup(name, title)
+    local popup = Instance.new("Frame")
+    popup.Size = UDim2.new(0, 280, 0, 340)
+    popup.Position = UDim2.new(0.5, 0, 0.5, 0)
+    popup.AnchorPoint = Vector2.new(0.5, 0.5)
+    popup.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    popup.Visible = false
+    popup.ZIndex = 60
+    popup.Name = name
+    popup.Parent = screenGui
+    Instance.new("UICorner", popup).CornerRadius = UDim.new(0, 12)
+
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 40, 40)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 20, 20))
+    }
+    gradient.Rotation = 45
+    gradient.Parent = popup
+
+    local shadow = Instance.new("UIStroke")
+    shadow.Thickness = 2
+    shadow.Color = Color3.fromRGB(0, 0, 0)
+    shadow.Transparency = 0.5
+    shadow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    shadow.Parent = popup
+
+    local popupTitle = Instance.new("TextLabel")
+    popupTitle.Size = UDim2.new(1, -16, 0, 40)
+    popupTitle.Position = UDim2.new(0, 8, 0, 8)
+    popupTitle.BackgroundTransparency = 1
+    popupTitle.Text = title
+    popupTitle.Font = Enum.Font.GothamBlack
+    popupTitle.TextSize = 18
+    popupTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    popupTitle.TextXAlignment = Enum.TextXAlignment.Left
+    popupTitle.Parent = popup
+
+    local backBtn = Instance.new("TextButton")
+    backBtn.Size = UDim2.new(0, 40, 0, 40)
+    backBtn.Position = UDim2.new(1, -48, 0, 8)
+    backBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    backBtn.Text = "←"
+    backBtn.Font = Enum.Font.GothamBold
+    backBtn.TextSize = 20
+    backBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    backBtn.ZIndex = 65
+    backBtn.Parent = popup
+    Instance.new("UICorner", backBtn).CornerRadius = UDim.new(0, 10)
+    animateButton(backBtn)
+    addHoverEffect(backBtn)
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, -16, 1, -64)
+    scroll.Position = UDim2.new(0, 8, 0, 56)
+    scroll.BackgroundTransparency = 1
+    scroll.ScrollBarThickness = 6
+    scroll.Parent = popup
+
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.Padding = UDim.new(0, 8)
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Parent = scroll
+
+    return popup, scroll, backBtn
+end
+
+-- Teleport Place Popup
+local teleportPlacePopup, teleportPlaceScroll, teleportPlaceBackBtn = createPopup("TeleportPlacePopup", "Teleport Place")
+
+-- Teleport Locations
+local teleportLocations = {
+    {Name = "Weapon NPC", Position = Vector3.new(936, 419, -3352)},
+    {Name = "Support NPC", Position = Vector3.new(937, 419, -3343)},
+    {Name = "House", Position = Vector3.new(943, 408, -3353)},
+    {Name = "Campfire", Position = Vector3.new(969, 407, -3370)},
+    {Name = "Trader NPC", Position = Vector3.new(998, 400, -3418)},
+    {Name = "PotionHouse", Position = Vector3.new(1215, 437, -3741)}
+}
+
+-- Create teleport place buttons
+for i, location in ipairs(teleportLocations) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -12, 0, 36)
+    btn.BackgroundColor3 = Color3.fromRGB(38, 38, 38)
+    btn.BorderSizePixel = 0
+    btn.Text = location.Name
+    btn.Font = Enum.Font.Gotham
+    btn.TextSize = 14
+    btn.TextColor3 = Color3.fromRGB(240, 240, 240)
+    btn.LayoutOrder = i
+    btn.Parent = teleportPlaceScroll
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1
+    stroke.Color = Color3.fromRGB(80, 80, 80)
+    stroke.Parent = btn
+    animateButton(btn)
+    addHoverEffect(btn)
+
+    btn.Activated:Connect(function()
+        if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+            Player.Character.HumanoidRootPart.CFrame = CFrame.new(location.Position)
+            pcall(function()
+                StarterGui:SetCore("SendNotification", {Title = "Teleport", Text = "Teleported to " .. location.Name, Duration = 2})
+            end)
+        else
+            pcall(function()
+                StarterGui:SetCore("SendNotification", {Title = "Teleport", Text = "Failed: No character found", Duration = 3})
+            end)
+        end
+        teleportPlacePopup.Visible = false
+    end)
+end
+
+-- Update teleport place scroll canvas
+local function updateTeleportPlaceCanvas()
+    local totalHeight = #teleportLocations * (36 + teleportPlaceScroll.UIListLayout.Padding.Offset) + 8
+    teleportPlaceScroll.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
+end
+updateTeleportPlaceCanvas()
+
+-- Teleport Player Popup
+local teleportPlayerPopup, teleportPlayerScroll, teleportPlayerBackBtn = createPopup("TeleportPlayerPopup", "Teleport Player")
+
+-- Function to update teleport player buttons
+local function updateTeleportPlayerButtons()
+    for _, child in ipairs(teleportPlayerScroll:GetChildren()) do
+        if child:IsA("GuiButton") then
+            child:Destroy()
+        end
+    end
+
+    local players = Players:GetPlayers()
+    for i, targetPlayer in ipairs(players) do
+        if targetPlayer ~= Player then
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, -12, 0, 36)
+            btn.BackgroundColor3 = Color3.fromRGB(38, 38, 38)
+            btn.BorderSizePixel = 0
+            btn.Text = targetPlayer.Name
+            btn.Font = Enum.Font.Gotham
+            btn.TextSize = 14
+            btn.TextColor3 = Color3.fromRGB(240, 240, 240)
+            btn.LayoutOrder = i
+            btn.Parent = teleportPlayerScroll
+            Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+            local stroke = Instance.new("UIStroke")
+            stroke.Thickness = 1
+            stroke.Color = Color3.fromRGB(80, 80, 80)
+            stroke.Parent = btn
+            animateButton(btn)
+            addHoverEffect(btn)
+
+            btn.Activated:Connect(function()
+                if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    Player.Character.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame
+                    pcall(function()
+                        StarterGui:SetCore("SendNotification", {Title = "Teleport", Text = "Teleported to " .. targetPlayer.Name, Duration = 2})
+                    end)
+                else
+                    pcall(function()
+                        StarterGui:SetCore("SendNotification", {Title = "Teleport", Text = "Failed: Character not found", Duration = 3})
+                    end)
+                end
+                teleportPlayerPopup.Visible = false
+            end)
+        end
+    end
+
+    local totalHeight = (#players - 1) * (36 + teleportPlayerScroll.UIListLayout.Padding.Offset) + 8
+    teleportPlayerScroll.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
+end
+
+-- Update player list on join/leave
+Players.PlayerAdded:Connect(function(player)
+    updateTeleportPlayerButtons()
+    if player.Name == "Rip_kaizer87" then
+        showOwnerNotification()
+    end
+end)
+Players.PlayerRemoving:Connect(updateTeleportPlayerButtons)
+updateTeleportPlayerButtons()
+
+-- Weapons Giver Popup
+local weaponsPopup, weaponsScroll, weaponsBackBtn = createPopup("WeaponsPopup", "Weapons Giver")
+
+-- Weapons list
+local weapons = {
+    "Sniper",
+    "Shotgun",
+    "Burst Rifle",
+    "AR",
+    "SMG",
+    "Auto Shotgun",
+    "Tommy Gun",
+    "Grenade Launcher",
+    "Rocket Launcher",
+    "Minigun",
+    "Railgun",
+    "DMR",
+    "Energy Rifle",
+    "Annihilator"
+}
+
+-- Create weapons buttons
+for i, wname in ipairs(weapons) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -12, 0, 36)
+    btn.BackgroundColor3 = Color3.fromRGB(38, 38, 38)
+    btn.BorderSizePixel = 0
+    btn.Text = wname
+    btn.Font = Enum.Font.Gotham
+    btn.TextSize = 14
+    btn.TextColor3 = Color3.fromRGB(240, 240, 240)
+    btn.LayoutOrder = i
+    btn.Parent = weaponsScroll
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1
+    stroke.Color = Color3.fromRGB(80, 80, 80)
+    stroke.Parent = btn
+    animateButton(btn)
+    addHoverEffect(btn)
+
+    btn.Activated:Connect(function()
+        local success, err = pcall(function()
+            local args = { wname }
+            local remote = ReplicatedStorage:WaitForChild("GiveTool")
+            remote:FireServer(unpack(args))
+        end)
+        if success then
+            pcall(function()
+                StarterGui:SetCore("SendNotification", {Title = "Weapons Giver", Text = wname .. " requested", Duration = 2})
+            end)
+        else
+            pcall(function()
+                StarterGui:SetCore("SendNotification", {Title = "Weapons Giver", Text = "Failed: " .. tostring(err), Duration = 3})
+            end)
+        end
+        weaponsPopup.Visible = false
+    end)
+end
+
+-- Update weapons scroll canvas
+local function updateWeaponsCanvas()
+    local totalHeight = #weapons * (36 + weaponsScroll.UIListLayout.Padding.Offset) + 8
+    weaponsScroll.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
+end
+updateWeaponsCanvas()
+
+-- Open popups
+teleportPlaceBtn.Activated:Connect(function()
+    teleportPlacePopup.Visible = true
+    teleportPlayerPopup.Visible = false
+    weaponsPopup.Visible = false
+end)
+
+teleportPlayerBtn.Activated:Connect(function()
+    updateTeleportPlayerButtons()
+    teleportPlacePopup.Visible = false
+    teleportPlayerPopup.Visible = true
+    weaponsPopup.Visible = false
+end)
+
+selectionBtn.Activated:Connect(function()
+    weaponsPopup.Visible = true
+    teleportPlacePopup.Visible = false
+    teleportPlayerPopup.Visible = false
+end)
+
+-- Close popups
+teleportPlaceBackBtn.Activated:Connect(function() teleportPlacePopup.Visible = false end)
+teleportPlayerBackBtn.Activated:Connect(function() teleportPlayerPopup.Visible = false end)
+weaponsBackBtn.Activated:Connect(function() weaponsPopup.Visible = false end)
+
+-- Close popups on click outside or Escape key
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local target = input.Target
+        if teleportPlacePopup.Visible and not (target and target:IsDescendantOf(teleportPlacePopup)) then
+            teleportPlacePopup.Visible = false
+        end
+        if teleportPlayerPopup.Visible and not (target and target:IsDescendantOf(teleportPlayerPopup)) then
+            teleportPlayerPopup.Visible = false
+        end
+        if weaponsPopup.Visible and not (target and target:IsDescendantOf(weaponsPopup)) then
+            weaponsPopup.Visible = false
+        end
+    elseif input.KeyCode == Enum.KeyCode.Escape then
+        teleportPlacePopup.Visible = false
+        teleportPlayerPopup.Visible = false
+        weaponsPopup.Visible = false
+    end
+end)
+
+-- Toggle UI visibility
+local function toggleUI()
+    mainFrame.Visible = not mainFrame.Visible
+    if not mainFrame.Visible then
+        teleportPlacePopup.Visible = false
+        teleportPlayerPopup.Visible = false
+        weaponsPopup.Visible = false
+    end
+end
+toggleBtn.Activated:Connect(toggleUI)
+closeBtn.Activated:Connect(toggleUI)
+
+-- Dragging logic
+local dragging, dragInput, dragStart, startPos
+local function clampCenterPosition(xOffset, yOffset)
+    local screenSize = screenGui.AbsoluteSize
+    local halfW, halfH = mainFrame.AbsoluteSize.X / 2, mainFrame.AbsoluteSize.Y / 2
+    local minX = -screenSize.X/2 + halfW
+    local maxX = screenSize.X/2 - halfW
+    local minY = -screenSize.Y/2 + halfH
+    local maxY = screenSize.Y/2 - halfH
+    return math.clamp(xOffset, minX, maxX), math.clamp(yOffset, minY, maxY)
+end
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragInput = input
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input == dragInput then
+        local delta = input.Position - dragStart
+        local newX = startPos.X.Offset + delta.X
+        local newY = startPos.Y.Offset + delta.Y
+        newX, newY = clampCenterPosition(newX, newY)
+        mainFrame.Position = UDim2.new(0.5, newX, 0.5, newY)
+    end
+end)
+
+-- Ensure frame stays within bounds
+screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+    local pos = mainFrame.Position
+    newX, newY = clampCenterPosition(pos.X.Offset, pos.Y.Offset)
+    mainFrame.Position = UDim2.new(0.5, newX, 0.5, newY)
+end)
+
+-- Update canvas size on child changes
+scrollFrame.ChildAdded:Connect(updateCanvasSize)
+scrollFrame.ChildRemoved:Connect(updateCanvasSize)
+
+-- Keep toggle button interactive
+toggleBtn.Active = true
+toggleBtn.Selectable = false
+animateButton(toggleBtn)
+addHoverEffect(toggleBtn)
+animateButton(closeBtn)
+addHoverEffect(closeBtn)
+
+-- [[ Universal Aim Assist Logic ]]
+local FOV = 120
+local AIM_SMOOTH = 0.58
+local RAYCASTS_PER_FRAME = 6
+
+local FOVring = Drawing.new("Circle")
+FOVring.Thickness = 2
+FOVring.Color = Color3.fromRGB(255, 255, 255)
+FOVring.Filled = false
+FOVring.Visible = false
+FOVring.Radius = FOV
+FOVring.Position = Camera.ViewportSize / 2
+
+local aimbotEnabled = false
+local validNPCs, visibleNPCs = {}, {}
+local rayIndex = 1
+local hbConn
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+rayParams.IgnoreWater = true
+
+local function isNPC(model)
+    if not model or not model:IsA("Model") then return false end
+    local hum = model:FindFirstChildWhichIsA("Humanoid", true)
+    if not hum or hum.Health <= 0 then return false end
+    if Players:GetPlayerFromCharacter(model) then return false end
+    return true
+end
+
+local function getAimPart(model)
+    for _, name in ipairs({"Head", "HumanoidRootPart"}) do
+        local p = model:FindFirstChild(name, true)
+        if p and p:IsA("BasePart") then return p end
+    end
+    for _, part in ipairs(model:GetDescendants()) do
+        if part:IsA("BasePart") then return part end
+    end
+end
+
+local function predictPos(model)
+    local part = getAimPart(model)
+    if not part then return nil end
+    return part.Position + (part.Velocity or Vector3.zero) * 0.02
+end
+
+local function getModel(inst)
+    while inst and not inst:IsA("Model") do inst = inst.Parent end
+    return inst
+end
+
+local function isVisible(model, pos)
+    if not pos then return false end
+    rayParams.FilterDescendantsInstances = {Player.Character}
+    local origin = Camera.CFrame.Position
+    local dir = pos - origin
+    local ray = workspace:Raycast(origin, dir, rayParams)
+    if not ray then return true end
+    local hitModel = getModel(ray.Instance)
+    return hitModel == model or ray.Instance:IsDescendantOf(model)
+end
+
+local function addNPC(npc)
+    if not table.find(validNPCs, npc) then table.insert(validNPCs, npc) end
+end
+
+local function removeNPC(npc)
+    for i = #validNPCs, 1, -1 do if validNPCs[i] == npc then table.remove(validNPCs, i) end end
+    for i = #visibleNPCs, 1, -1 do if visibleNPCs[i] == npc then table.remove(visibleNPCs, i) end end
+end
+
+for _, obj in ipairs(workspace:GetDescendants()) do
+    if isNPC(obj) then addNPC(obj) end
+end
+
+workspace.DescendantAdded:Connect(function(obj)
+    if isNPC(obj) then addNPC(obj) end
+end)
+
+workspace.DescendantRemoving:Connect(function(obj)
+    if isNPC(obj) then removeNPC(obj) end
+end)
+
+local function batchRaycast()
+    if #validNPCs == 0 then return end
+    for i = 1, RAYCASTS_PER_FRAME do
+        if rayIndex > #validNPCs then rayIndex = 1 end
+        local npc = validNPCs[rayIndex]
+        if npc and npc.Parent and isNPC(npc) then
+            local hum = npc:FindFirstChildWhichIsA("Humanoid", true)
+            if hum and hum.Health > 0 then
+                local pos = predictPos(npc)
+                if pos and isVisible(npc, pos) then
+                    if not table.find(visibleNPCs, npc) then table.insert(visibleNPCs, npc) end
+                else
+                    for idx = #visibleNPCs, 1, -1 do
+                        if visibleNPCs[idx] == npc then table.remove(visibleNPCs, idx) end
+                    end
+                end
+            else
+                removeNPC(npc)
+            end
+        end
+        rayIndex = rayIndex + 1
+    end
+end
+
+local function getClosest()
+    local center = Camera.ViewportSize / 2
+    local best, minDist = nil, math.huge
+    for _, npc in ipairs(visibleNPCs) do
+        local hum = npc:FindFirstChildWhichIsA("Humanoid", true)
+        if hum and hum.Health > 0 then
+            local pos = predictPos(npc) or getAimPart(npc) and getAimPart(npc).Position
+            if pos then
+                local screen, onScreen = Camera:WorldToViewportPoint(pos)
+                if onScreen and screen.Z > 0 then
+                    local dist = (Vector2.new(screen.X, screen.Y) - center).Magnitude
+                    if dist < FOV and dist < minDist then
+                        minDist = dist
+                        best = npc
+                    end
+                end
+            end
+        end
+    end
+    return best
+end
+
+local function aimAt(pos)
+    local cf = Camera.CFrame
+    local newDir = cf.LookVector:Lerp((pos - cf.Position).Unit, AIM_SMOOTH)
+    Camera.CFrame = CFrame.new(cf.Position, cf.Position + newDir)
+end
+
+local function startAimbot()
+    if hbConn then return end
+    FOVring.Visible = true
+    hbConn = RunService.Heartbeat:Connect(function()
+        FOVring.Position = Camera.ViewportSize / 2
+        FOVring.Radius = FOV * (Camera.ViewportSize.Y / 1080)
+        batchRaycast()
+        local target = getClosest()
+        if target then
+            local pos = predictPos(target) or getAimPart(target).Position
+            if pos then aimAt(pos) end
+        end
+    end)
+end
+
+local function stopAimbot()
+    if hbConn then hbConn:Disconnect() hbConn = nil end
+    FOVring.Visible = false
+    visibleNPCs = {}
+end
+
+aimAssistBtn.Activated:Connect(function()
+    aimbotEnabled = not aimbotEnabled
+    if aimbotEnabled then
+        startAimbot()
+    else
+        stopAimbot()
+    end
+    aimAssistBtn.Text = "AIMASSIST: " .. (aimbotEnabled and "ON" or "OFF")
+    aimAssistBtn.TextColor3 = aimbotEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
+end)
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if not gpe and input.KeyCode == Enum.KeyCode.T then
+        aimbotEnabled = not aimbotEnabled
+        if aimbotEnabled then
+            startAimbot()
+        else
+            stopAimbot()
+        end
+        aimAssistBtn.Text = "AIMASSIST: " .. (aimbotEnabled and "ON" or "OFF")
+        aimAssistBtn.TextColor3 = aimbotEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+    if plr == Player then
+        pcall(function() FOVring:Remove() end)
+        pcall(function() screenGui:Destroy() end)
+    end
+end)
+
+print("[✅ Universal Aim Assist Loaded | Only targets alive NPCs]")
